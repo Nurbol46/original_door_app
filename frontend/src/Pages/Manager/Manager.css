@@ -1,0 +1,90 @@
+.manager-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: transparent;
+}
+
+.manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.08);
+  padding: 22px 28px;
+}
+
+.manager-header h1 {
+  margin: 0;
+  font-size: clamp(24px, 2vw, 34px);
+  color: #111827;
+}
+
+.manager-subtitle {
+  margin: 0 0 6px;
+  color: #6b7280;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.manager-name {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #374151;
+  font-weight: 600;
+}
+
+.manager-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.manager-link,
+.manager-logout {
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
+  text-decoration: none;
+}
+
+.manager-link {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.manager-link:hover,
+.manager-link.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.manager-logout {
+  background: #dc2626;
+  color: white;
+  border: none;
+}
+
+.manager-logout:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.manager-main {
+  flex: 1;
+  padding: 32px 28px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
