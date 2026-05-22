@@ -105,11 +105,16 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
+_default_cors = (
+    "http://localhost:5173,"
+    "http://localhost:3000,"
+    "http://127.0.0.1:5173,"
+    "http://127.0.0.1:3000"
+)
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
+    origin.strip()
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', _default_cors).split(',')
+    if origin.strip()
 ]
 
 LANGUAGE_CODE = 'en-us'

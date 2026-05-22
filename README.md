@@ -22,9 +22,9 @@
 
 | Часть | Технологии |
 |-------|------------|
-| Backend | Django 6, Django REST Framework, Simple JWT, drf-yasg, PostgreSQL / SQLite |
+| Backend | Django 6, Django REST Framework, Simple JWT, drf-yasg, PostgreSQL |
 | Frontend | React 18, Vite, React Router, Sass |
-| Прочее | Pillow (аватары), ReportLab (PDF) |
+| Прочее | Pillow (аватары), ReportLab (PDF), Docker Compose |
 
 ## Структура проекта
 
@@ -36,43 +36,150 @@ door_app_local/
 │   └── manager/    # API панели менеджера
 ├── config/         # настройки Django
 ├── frontend/       # React-приложение (Vite)
-├── media/          # загруженные файлы (создаётся при работе)
+├── media/          # загруженные файлы
+├── docker-compose.yml
+├── Dockerfile
+├── docker/entrypoint.sh
 ├── manage.py
 ├── create_test_data.py
 ├── requirements.txt
 └── .env.example
 ```
 
-## Требования
+---
 
-- **Python** 3.11+ (в проекте используется venv с Python 3.13)
-- **Node.js** 18+ и npm
-- **PostgreSQL** 14+ — опционально; для быстрого старта достаточно SQLite
+## Как запустить проект
 
-## Быстрый старт (SQLite, без PostgreSQL)
+Ниже — то, что нужно сделать человеку, который впервые открывает репозиторий на своём компьютере.
 
-Подходит, если нужно просто запустить проект локально.
+### Что понадобится
 
-### 1. Backend
+- [Docker](https://docs.docker.com/get-docker/) и Docker Compose (в Docker Desktop уже есть; в Linux — пакет `docker-compose-plugin`)
+- Git (чтобы склонировать репозиторий)
+
+Устанавливать Python, Node.js и PostgreSQL **не нужно** — всё поднимается в контейнерах.
+
+### Шаг 1. Скачать проект
+
+```bash
+git clone <URL-репозитория> door_app_local
+cd door_app_local
+```
+
+Если проект уже лежит в папке — просто перейдите в неё:
+
+```bash
+cd door_app_local
+```
+
+### Шаг 2. Запустить
+
+```bash
+docker compose up --build
+```
+
+При первом запуске Docker:
+
+1. Соберёт образы backend и frontend
+2. Запустит PostgreSQL
+3. Применит миграции базы данных
+4. Создаст тестовые аккаунты и услуги
+
+Дождитесь в логах сообщений о том, что backend слушает порт `8000`, а frontend — `5173`. Окно терминала не закрывайте — пока оно открыто, проект работает.
+
+### Шаг 3. Открыть в браузере
+
+| Что открыть | Адрес |
+|-------------|--------|
+| **Сайт (основное)** | http://localhost:5173 |
+| Документация API (Swagger) | http://localhost:8000/swagger/ |
+| Админка Django | http://localhost:8000/admin/ |
+
+### Шаг 4. Войти под тестовым пользователем
+
+После первого запуска уже есть готовые аккаунты:
+
+| Роль | Email | Пароль |
+|------|-------|--------|
+| Пользователь | user@example.com | user123 |
+| Менеджер | manager@example.com | manager123 |
+| Менеджер (админ) | admin@gmail.com | admin |
+
+Менеджер после входа попадает в `/manager/orders`, обычный пользователь — на главную.
+
+### Остановить проект
+
+В том же терминале, где запущен Docker: `Ctrl+C`.
+
+Полностью выключить контейнеры:
+
+```bash
+docker compose down
+```
+
+Удалить контейнеры **и** данные базы (начать с чистой БД):
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+### Запуск с другого устройства в локальной сети
+
+На компьютере, где крутится Docker, узнайте IP (например `192.168.1.10`). На телефоне или другом ПК в той же Wi‑Fi сети откройте:
+
+```
+http://192.168.1.10:5173
+```
+
+Если сайт не открывается или API отвечает с ошибкой, перезапустите с указанием IP (подставьте свой):
+
+```bash
+ALLOWED_HOSTS=localhost,127.0.0.1,backend,192.168.1.10 \
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://192.168.1.10:5173 \
+docker compose up --build
+```
+
+### Настройка через `.env` (необязательно)
+
+Для Docker всё уже задано в `docker-compose.yml`. Файл `.env` нужен только если хотите переопределить секреты или режим отладки:
+
+```bash
+cp .env.example .env
+# отредактируйте .env при необходимости
+docker compose up --build
+```
+
+Шаблон переменных — в `.env.example`. Сам `.env` в git не попадает.
+
+---
+
+## Запуск без Docker (для разработки)
+
+Если вы меняете код и хотите запускать backend и frontend отдельно на машине.
+
+**Нужно:** Python 3.11+, Node.js 18+, npm. База — SQLite (проще) или PostgreSQL 14+.
+
+### Backend
 
 ```bash
 cd door_app_local
 
 python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
 
 cp .env.example .env
 ```
 
-В файле `.env` укажите SQLite вместо PostgreSQL:
+В `.env` для SQLite (без установки PostgreSQL):
 
 ```env
 DB_ENGINE=django.db.backends.sqlite3
 ```
 
-Затем:
+Для PostgreSQL укажите `DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` — см. `.env.example`.
 
 ```bash
 python manage.py migrate
@@ -80,65 +187,19 @@ python create_test_data.py
 python manage.py runserver
 ```
 
-Сервер API: [http://localhost:8000](http://localhost:8000)  
-Документация Swagger: [http://localhost:8000/swagger/](http://localhost:8000/swagger/)  
-Админка Django: [http://localhost:8000/admin/](http://localhost:8000/admin/)
+API: http://localhost:8000
 
-### 2. Frontend (второй терминал)
+### Frontend (второй терминал)
 
 ```bash
 cd door_app_local/frontend
-
 npm install
 npm run dev
 ```
 
-Сайт: [http://localhost:5173](http://localhost:5173)
+Сайт: http://localhost:5173
 
-Vite проксирует запросы `/api` и `/media` на `http://localhost:8000`, поэтому отдельно настраивать CORS для разработки не нужно.
-
----
-
-## Запуск с PostgreSQL
-
-1. Создайте базу, например:
-
-```sql
-CREATE DATABASE doors_db;
-```
-
-2. Скопируйте и отредактируйте `.env`:
-
-```bash
-cp .env.example .env
-```
-
-По умолчанию в `.env.example` уже указаны типичные параметры:
-
-```env
-DB_ENGINE=django.db.backends.postgresql
-DB_NAME=doors_db
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_HOST=localhost
-DB_PORT=5432
-```
-
-3. Выполните те же шаги, что в быстром старте: `migrate`, `create_test_data.py`, `runserver`, и во втором терминале `npm run dev`.
-
----
-
-## Тестовые аккаунты
-
-Создаются скриптом `create_test_data.py` (и частично миграцией `users.0002`):
-
-| Роль | Email | Пароль |
-|------|-------|--------|
-| Менеджер | manager@example.com | manager123 |
-| Менеджер (админ) | admin@gmail.com | admin |
-| Пользователь | user@example.com | user123 |
-
-После входа менеджер перенаправляется в `/manager/orders`, пользователь остаётся на главной.
+Оба процесса (порты `8000` и `5173`) должны работать одновременно. Vite проксирует `/api` и `/media` на backend.
 
 ---
 
@@ -148,27 +209,25 @@ DB_PORT=5432
 |------------|----------|--------------|
 | `SECRET_KEY` | Секрет Django | dev-ключ в settings |
 | `DEBUG` | Режим отладки | `True` |
-| `ALLOWED_HOSTS` | Разрешённые хосты | `localhost,127.0.0.1` |
+| `ALLOWED_HOSTS` | Разрешённые хосты (через запятую) | `localhost,127.0.0.1` |
 | `DB_ENGINE` | Движок БД | PostgreSQL |
-| `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | Параметры PostgreSQL | см. `.env.example` |
-
-Файл `.env` не коммитится в git — используйте `.env.example` как шаблон.
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | PostgreSQL | см. `.env.example` |
+| `CORS_ALLOWED_ORIGINS` | Origins для CORS (через запятую) | localhost:5173, … |
+| `LOAD_TEST_DATA` | Тестовые данные при старте Docker (`true`/`false`) | `true` |
 
 ---
 
 ## Полезные команды
 
 ```bash
-# Активировать venv (если ещё не активирован)
+# Логи всех сервисов (Docker)
+docker compose logs -f
+
+# Только backend
+docker compose logs -f backend
+
+# Тесты backend (локально, SQLite)
 source venv/bin/activate
-
-# Создать суперпользователя для /admin/
-python manage.py createsuperuser
-
-# Пересобрать тестовые данные
-python create_test_data.py
-
-# Тесты (удобно на SQLite, PostgreSQL не обязателен)
 DB_ENGINE=django.db.backends.sqlite3 python manage.py test
 
 # Сборка фронтенда для продакшена
@@ -185,23 +244,29 @@ cd frontend && npm run build
 | `/api/orders/` | услуги, заявки пользователя, уведомления |
 | `/api/manager/` | заявки, услуги, пользователи (роль manager) |
 
-Полное описание эндпоинтов — в Swagger: `/swagger/`.
+Полное описание — в Swagger: http://localhost:8000/swagger/
 
 ---
 
 ## Типичные проблемы
 
-**`ModuleNotFoundError` / Django не найден**  
-Убедитесь, что виртуальное окружение активировано: в начале строки терминала должно быть `(venv)`.
+**Docker: `Cannot connect to the Docker daemon`**  
+Запустите Docker Desktop (или службу `docker` в Linux) и повторите `docker compose up --build`.
 
-**Ошибка подключения к PostgreSQL**  
-Проверьте, что сервер PostgreSQL запущен и данные в `.env` верны. Либо переключитесь на SQLite (`DB_ENGINE=django.db.backends.sqlite3`).
-
-**Фронтенд не видит API**  
-Backend должен работать на порту `8000`, frontend — на `5173`. Оба процесса должны быть запущены одновременно.
+**Сайт не открывается**  
+Проверьте, что команда `docker compose up` ещё выполняется и в логах нет ошибок backend/frontend.
 
 **Пустой каталог услуг**  
-Выполните `python create_test_data.py` после миграций.
+Пересоздайте данные: `docker compose down -v && docker compose up --build` или локально `python create_test_data.py`.
+
+**Локально: Django не найден**  
+Активируйте venv: в начале строки терминала должно быть `(venv)`.
+
+**Локально: ошибка PostgreSQL**  
+Проверьте, что PostgreSQL запущен и `.env` верный, либо переключитесь на SQLite (`DB_ENGINE=django.db.backends.sqlite3`).
+
+**Локально: фронтенд не видит API**  
+Должны работать и `runserver` (8000), и `npm run dev` (5173).
 
 ---
 
