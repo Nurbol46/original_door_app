@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+sh docker/wait-for-db.sh
+
 python manage.py migrate --noinput
 
 if [ "${LOAD_TEST_DATA:-true}" = "true" ]; then

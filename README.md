@@ -39,7 +39,11 @@ door_app_local/
 ├── media/          # загруженные файлы
 ├── docker-compose.yml
 ├── Dockerfile
-├── docker/entrypoint.sh
+├── docker/
+│   ├── entrypoint.sh
+│   ├── wait-for-db.sh
+│   ├── up.sh
+│   └── .env.docker
 ├── manage.py
 ├── create_test_data.py
 ├── requirements.txt
@@ -57,7 +61,7 @@ door_app_local/
 - [Docker](https://docs.docker.com/get-docker/) и Docker Compose (в Docker Desktop уже есть; в Linux — пакет `docker-compose-plugin`)
 - Git (чтобы склонировать репозиторий)
 
-Устанавливать Python, Node.js и PostgreSQL **не нужно** — всё поднимается в контейнерах.
+Устанавливать Python, Node.js и PostgreSQL **на компьютер не нужно**. База PostgreSQL поднимается в отдельном Docker-контейнере: при первом запуске образ `postgres:16-alpine` скачивается автоматически, база `doors_db` создаётся сама.
 
 ### Шаг 1. Скачать проект
 
@@ -78,11 +82,17 @@ cd door_app_local
 docker compose up --build
 ```
 
+Или через скрипт (сначала скачает образ PostgreSQL, если его ещё нет):
+
+```bash
+./docker/up.sh
+```
+
 При первом запуске Docker:
 
-1. Соберёт образы backend и frontend
-2. Запустит PostgreSQL
-3. Применит миграции базы данных
+1. Скачает образ PostgreSQL (если ещё не был на машине)
+2. Соберёт образы backend и frontend
+3. Дождётся готовности базы и применит миграции
 4. Создаст тестовые аккаунты и услуги
 
 Дождитесь в логах сообщений о том, что backend слушает порт `8000`, а frontend — `5173`. Окно терминала не закрывайте — пока оно открыто, проект работает.
@@ -132,25 +142,18 @@ docker compose up --build
 http://192.168.1.10:5173
 ```
 
-Если сайт не открывается или API отвечает с ошибкой, перезапустите с указанием IP (подставьте свой):
+Если сайт не открывается или API отвечает с ошибкой, добавьте IP в `docker/.env.docker` (подставьте свой):
 
-```bash
-ALLOWED_HOSTS=localhost,127.0.0.1,backend,192.168.1.10 \
-CORS_ALLOWED_ORIGINS=http://localhost:5173,http://192.168.1.10:5173 \
-docker compose up --build
+```env
+ALLOWED_HOSTS=localhost,127.0.0.1,backend,192.168.1.10
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://192.168.1.10:5173
 ```
 
-### Настройка через `.env` (необязательно)
+Затем перезапустите: `docker compose up --build`.
 
-Для Docker всё уже задано в `docker-compose.yml`. Файл `.env` нужен только если хотите переопределить секреты или режим отладки:
+### Настройка для Docker (необязательно)
 
-```bash
-cp .env.example .env
-# отредактируйте .env при необходимости
-docker compose up --build
-```
-
-Шаблон переменных — в `.env.example`. Сам `.env` в git не попадает.
+Параметры backend и базы для контейнеров — в `docker/.env.docker` (уже настроено под Compose). Корневой `.env` используется только для `SECRET_KEY` при запуске через Docker; для локальной разработки без Docker — см. `.env.example`.
 
 ---
 
@@ -158,7 +161,7 @@ docker compose up --build
 
 Если вы меняете код и хотите запускать backend и frontend отдельно на машине.
 
-**Нужно:** Python 3.11+, Node.js 18+, npm. База — SQLite (проще) или PostgreSQL 14+.
+**Нужно:** Python 3.11+, Node.js 18+, npm, PostgreSQL 14+ (или только контейнер базы: `docker compose up db -d`).
 
 ### Backend
 
@@ -173,13 +176,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-В `.env` для SQLite (без установки PostgreSQL):
-
-```env
-DB_ENGINE=django.db.backends.sqlite3
-```
-
-Для PostgreSQL укажите `DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` — см. `.env.example`.
+В `.env` укажите `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` — см. `.env.example`.
 
 ```bash
 python manage.py migrate
@@ -210,10 +207,11 @@ npm run dev
 | `SECRET_KEY` | Секрет Django | dev-ключ в settings |
 | `DEBUG` | Режим отладки | `True` |
 | `ALLOWED_HOSTS` | Разрешённые хосты (через запятую) | `localhost,127.0.0.1` |
-| `DB_ENGINE` | Движок БД | PostgreSQL |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | PostgreSQL | см. `.env.example` |
 | `CORS_ALLOWED_ORIGINS` | Origins для CORS (через запятую) | localhost:5173, … |
 | `LOAD_TEST_DATA` | Тестовые данные при старте Docker (`true`/`false`) | `true` |
+
+Для Docker эти переменные заданы в `docker/.env.docker`, а не в корневом `.env`.
 
 ---
 
@@ -226,9 +224,9 @@ docker compose logs -f
 # Только backend
 docker compose logs -f backend
 
-# Тесты backend (локально, SQLite)
+# Тесты backend (нужен запущенный PostgreSQL)
 source venv/bin/activate
-DB_ENGINE=django.db.backends.sqlite3 python manage.py test
+python manage.py test
 
 # Сборка фронтенда для продакшена
 cd frontend && npm run build
@@ -253,6 +251,12 @@ cd frontend && npm run build
 **Docker: `Cannot connect to the Docker daemon`**  
 Запустите Docker Desktop (или службу `docker` в Linux) и повторите `docker compose up --build`.
 
+**Docker: `Invalid HTTP_HOST header: 'backend:8000'`**  
+В `docker/.env.docker` в `ALLOWED_HOSTS` должен быть `backend`. Не подставляйте корневой `.env` с `DB_HOST=localhost` — для Docker используется только `docker/.env.docker`.
+
+**Docker: backend стартует раньше PostgreSQL**  
+Перезапустите: `docker compose down && docker compose up --build`. Backend ждёт готовности БД через `pg_isready`.
+
 **Сайт не открывается**  
 Проверьте, что команда `docker compose up` ещё выполняется и в логах нет ошибок backend/frontend.
 
@@ -263,7 +267,7 @@ cd frontend && npm run build
 Активируйте venv: в начале строки терминала должно быть `(venv)`.
 
 **Локально: ошибка PostgreSQL**  
-Проверьте, что PostgreSQL запущен и `.env` верный, либо переключитесь на SQLite (`DB_ENGINE=django.db.backends.sqlite3`).
+Проверьте, что PostgreSQL запущен и параметры в `.env` верны. Либо поднимите только базу: `docker compose up db -d`.
 
 **Локально: фронтенд не видит API**  
 Должны работать и `runserver` (8000), и `npm run dev` (5173).
